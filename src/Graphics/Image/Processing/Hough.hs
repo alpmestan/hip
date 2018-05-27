@@ -13,11 +13,11 @@ import Data.Array.ST (newArray, writeArray, readArray, runSTArray)
 import Data.List
 
 import Prelude as P hiding (subtract)
-import Graphics.Image.Processing.Filter	
+import Graphics.Image.Processing.Filter
 import Graphics.Image
 import Graphics.Image.ColorSpace
 import Graphics.Image.IO
-import Graphics.Image.Interface as I 
+import Graphics.Image.Interface as I
 import Graphics.Image.Types as IP
 
 -- ####### Some trivial functions ########
@@ -40,14 +40,18 @@ mag x = sqrt (dotProduct x x)
 
 fromIntegralP :: (Integral x, Num y) => (x, x) -> (y, y)
 fromIntegralP (x1, y1) = (fromIntegral x1, fromIntegral y1)
-   
-hough
-  :: forall arr a b.
-     ( Integral b, IP.Array arr RGB a, IP.Array arr RGB b
-     , IP.Array arr Y Int, MArray arr Y Int
-     , IP.Array arr Y Double, MArray arr Y Double) => Image arr RGB a -> Int -> Int -> Image arr RGB b
 
-hough image thetaSz distSz = hImage
+hough
+  :: forall arr a.
+     ( IP.Array arr RGB a, IP.Array arr RGB Word8
+     , MArray arr Y Double, IP.Array arr Y Double
+     , IP.Array arr RGB Double
+     )
+  => Image arr RGB a
+  -> Int
+  -> Int
+  -> Image arr RGB Double
+hough image thetaSz distSz = I.map (fmap toDouble) hImage
  where
    widthMax, xCtr, heightMax, yCtr :: Int
    widthMax = ((rows image) - 1)
@@ -70,9 +74,9 @@ hough image thetaSz distSz = hImage
 
    distMax :: Double
    distMax = (sqrt . fromIntegral $ (heightMax + 1) ^ (2 :: Int) + (widthMax + 1) ^ (2 :: Int)) / 2
-   
+
    accBin = runSTArray $
-     do arr <- newArray ((0, 0), (thetaSz, distSz)) 0
+     do arr <- newArray ((0, 0), (thetaSz, distSz)) (0 :: Double)
         forM_ slopeMap $ \((x, y), gradient) -> do
             let (x', y') = fromIntegralP $ (xCtr, yCtr) `sub` (x, y)
             when (mag gradient > 127) $
@@ -87,21 +91,22 @@ hough image thetaSz distSz = hImage
                   do old <- readArray arr idx
                      writeArray arr idx (old + 1)
         return arr
-	
+
    maxAcc = F.maximum accBin
    hTransform (x, y) =
         let l = 255 - truncate ((accBin ! (x, y)) / maxAcc * 255)
         in PixelRGB l l l
- 
+
+   hImage :: Image arr RGB Word8
    hImage = makeImage (thetaSz, distSz) hTransform
-   
+
 test :: IO ()
 test = do
       frog <- readImageRGB VU "frog_rbg.jpg"
       input1 <- getLine
       input2 <- getLine
       let thetaSz = (P.read input1 :: Int)
-      let distSz = (P.read input2 :: Int)  
+      let distSz = (P.read input2 :: Int)
       writeImage "input.png" frog
       let houghImage :: Image VU RGB Double
           houghImage = hough frog thetaSz distSz
